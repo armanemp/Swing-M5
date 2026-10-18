@@ -21,3 +21,9 @@ jobs:
         run: dotnet restore src/SwingM5/SwingM5.csproj
       - name: Build
         run: dotnet build src/SwingM5/SwingM5.csproj --configuration Release --no-restore
+
+      - name: Verify named .algo artifact
+        shell: bash
+        run: |
+          test -f src/SwingM5/bin/Release/net6.0/SwingM5.algo
+          ls -lh src/SwingM5/bin/Release/net6.0/SwingM5.algo
