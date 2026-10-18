@@ -9,10 +9,7 @@ namespace cAlgo.Indicators
     [Indicator(TimeZone = TimeZones.UTC, AccessRights = AccessRights.None, IsOverlay = true, AutoRescale = false)]
     public class SwingM5 : Indicator
     {
-        [Parameter("Require M5 chart", DefaultValue = true, Group = "General")]
-        public bool RequireM5Chart { get; set; }
-
-        [Parameter("Pivot depth (bars)", DefaultValue = 3, MinValue = 2, MaxValue = 10, Group = "Swing detection")]
+                [Parameter("Pivot depth (bars)", DefaultValue = 3, MinValue = 2, MaxValue = 10, Group = "Swing detection")]
         public int PivotDepth { get; set; }
 
         [Parameter("ATR period", DefaultValue = 14, MinValue = 5, MaxValue = 100, Group = "Swing detection")]
@@ -51,9 +48,9 @@ namespace cAlgo.Indicators
             _m1Bars = MarketData.GetBars(TimeFrame.Minute, SymbolName);
             _m15Bars = MarketData.GetBars(TimeFrame.Minute15, SymbolName);
 
-            if (RequireM5Chart && TimeFrame != TimeFrame.Minute5)
+            if (TimeFrame != TimeFrame.Minute5)
             {
-                Print("Swing-M5 is tuned for the M5 chart. Set Require M5 chart = false to run it on another timeframe.");
+                Print("Swing-M5 is designed for M5. Attach it to a five-minute chart to calculate swings.");
                 _timeframeWarningPrinted = true;
             }
         }
@@ -69,7 +66,7 @@ namespace cAlgo.Indicators
 
             _lastProcessedIndex = decisionIndex;
 
-            if (RequireM5Chart && TimeFrame != TimeFrame.Minute5)
+            if (TimeFrame != TimeFrame.Minute5)
             {
                 if (!_timeframeWarningPrinted)
                 {
@@ -548,9 +545,7 @@ namespace cAlgo.Indicators
 
             if (ShowScoreLabels)
             {
-                string label = pivot.Structure;
-                if (ShowScoreLabels)
-                    label += " " + pivot.Score.ToString(CultureInfo.InvariantCulture);
+                string label = pivot.Structure + " " + pivot.Score.ToString(CultureInfo.InvariantCulture);
 
                 pivot.TextName = "SwingM5_T_" + pivot.Time.Ticks.ToString(CultureInfo.InvariantCulture);
                 Chart.DrawText(pivot.TextName, label, pivot.Time, labelPrice, color);
