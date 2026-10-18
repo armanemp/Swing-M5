@@ -4,9 +4,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
+    <AlgoName>SwingM5</AlgoName>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="cTrader.Automate" Version="1.*" />
+    <PackageReference Include="cTrader.Automate" Version="1.0.21" />
   </ItemGroup>
 </Project>
