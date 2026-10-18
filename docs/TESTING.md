@@ -39,3 +39,9 @@ When NuGet is unreachable:
 5. Add the indicator to XAUUSD M5 and check the output against the visual and non-repaint checklist above.
 
 The local cTrader build is the platform acceptance step; a source copy is not a successful compile.
+
+## Verified project build and artifact naming
+
+Run `.\scripts\build-indicator.ps1` from the repository root. It requires a successful restore/build, checks the exact file `src/SwingM5/bin/Release/net6.0/SwingM5.algo`, then installs that artifact in `%USERPROFILE%\Documents\cAlgo\Sources\Indicators\SwingM5.algo` with a timestamped backup if an existing artifact differs.
+
+The root `Directory.Build.targets` sets the cTrader bundle filename before metadata extraction. CI also checks the named artifact so a generic success message or a wrongly named `src.algo` does not pass the artifact-validation gate.
