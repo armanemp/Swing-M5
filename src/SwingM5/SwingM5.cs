@@ -168,6 +168,8 @@ namespace cAlgo.Indicators
             score += (int)Math.Round(Clamp(displacementInAtr * 8.0, 0, 10));
             score += WickScore(rejectionWickRatio);
             score += ConfirmationCandleScore(decisionIndex, isHigh);
+            if (HasLiquiditySweep(candidateIndex, isHigh, SwingMeasurementLookback, atr))
+                score += 8;
             if (structureShift)
                 score += 6;
             score += htfBonus;
@@ -421,6 +423,33 @@ namespace cAlgo.Indicators
             for (int i = start; i <= end; i++)
                 highest = Math.Max(highest, Bars.HighPrices[i]);
             return highest == double.MinValue ? Bars.HighPrices[center] : highest;
+        }
+
+        private bool HasLiquiditySweep(int candidateIndex, bool isHigh, int lookback, double atr)
+        {
+            int start = Math.Max(0, candidateIndex - lookback);
+            int end = candidateIndex - 1;
+            if (end < start)
+                return false;
+
+            double priorHigh = double.MinValue;
+            double priorLow = double.MaxValue;
+            for (int i = start; i <= end; i++)
+            {
+                priorHigh = Math.Max(priorHigh, Bars.HighPrices[i]);
+                priorLow = Math.Min(priorLow, Bars.LowPrices[i]);
+            }
+
+            double buffer = Math.Max(Symbol.TickSize * 2, atr * 0.03);
+
+            // Count only a failed break beyond the recent range: the wick sweeps
+            // the prior extreme, but the candidate candle closes back inside it.
+            if (isHigh)
+                return Bars.HighPrices[candidateIndex] > priorHigh + buffer &&
+                       Bars.ClosePrices[candidateIndex] < priorHigh;
+
+            return Bars.LowPrices[candidateIndex] < priorLow - buffer &&
+                   Bars.ClosePrices[candidateIndex] > priorLow;
         }
 
         private double CalculateDisplacement(int pivotIndex, int decisionIndex, double pivotPrice, bool isHigh)
