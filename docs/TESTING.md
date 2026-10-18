@@ -27,3 +27,15 @@
 ## قبل از استفاده‌ی عملی
 
 ابتدا حساب آزمایشی و داده‌ی تاریخی همان بروکر را بررسی کن. اجرای زنده، تأخیر شبکه، اسپرد و گپ می‌توانند نتیجه‌ی معاملاتی را تغییر دهند. این اندیکاتور خودش سفارش نمی‌گذارد و سیگنال آن توصیه‌ی مالی نیست.
+
+## Offline compile using cTrader Desktop
+
+When NuGet is unreachable:
+
+1. Run `.\scripts\Copy-ToCTrader.ps1` from the repository root in PowerShell.
+2. In cTrader Desktop, choose **Settings → Algo → Embedded compiler**.
+3. Open **Algo → Indicators**, select/refresh SwingM5, and click **Build**.
+4. Capture the cTrader compile log; continue only if it reports a successful compile.
+5. Add the indicator to XAUUSD M5 and check the output against the visual and non-repaint checklist above.
+
+The local cTrader build is the platform acceptance step; a source copy is not a successful compile.
