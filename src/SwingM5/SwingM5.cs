@@ -125,7 +125,6 @@ namespace cAlgo.Indicators
             double price = isHigh ? Bars.HighPrices[candidateIndex] : Bars.LowPrices[candidateIndex];
             DateTime pivotTime = Bars.OpenTimes[candidateIndex];
 
-            Pivot previousSame = FindLastPivot(isHigh, pivotTime);
             Pivot previousOpposite = FindLastPivot(!isHigh, pivotTime);
 
             // Measure the recent local leg only. A distant prior entry can inflate this swing.
@@ -179,7 +178,6 @@ namespace cAlgo.Indicators
             if (score < MinimumScore)
                 return;
 
-            string structure = ClassifyStructure(isHigh, price, previousSame, atr);
             var pivot = new Pivot
             {
                 Index = candidateIndex,
@@ -187,12 +185,11 @@ namespace cAlgo.Indicators
                 Price = price,
                 IsHigh = isHigh,
                 Score = score,
-                Structure = structure,
                 Atr = atr
             };
 
             _pivots.Add(pivot);
-            DrawPivot(pivot, previousOpposite, decisionIndex);
+            DrawPivot(pivot, decisionIndex);
 
             // Keep enough recent analytical history for structure classification without
             // retaining an unbounded list during very long sessions.
@@ -283,7 +280,7 @@ namespace cAlgo.Indicators
             int start = FindIndexAtOrAfter(_m1Bars, candidateCloseTime);
             int end = FindLastClosedBarIndex(_m1Bars, decisionCloseTime, 1);
 
-            if (start < 3 || end < start + 2 || end >= _m1Bars.Count)
+            if (start < 3 || end < start + 3 || end >= _m1Bars.Count)
                 return false;
 
             double atr = CalculateAtr(Bars, candidateIndex, AtrPeriod);
@@ -301,7 +298,7 @@ namespace cAlgo.Indicators
             }
 
             // M1 MSS/CHoCH: a closed M1 close must break the previous 3-bar micro range.
-            for (int i = Math.Max(start, 3); i <= end; i++)
+            for (int i = Math.Max(start + 3, 3); i <= end; i++)
             {
                 double priorHigh = double.MinValue;
                 double priorLow = double.MaxValue;
@@ -694,30 +691,7 @@ namespace cAlgo.Indicators
             return null;
         }
 
-        private string ClassifyStructure(bool isHigh, double price, Pivot previousSame, double atr)
-        {
-            if (previousSame == null)
-                return isHigh ? "SH" : "SL";
-
-            double tolerance = atr * 0.12;
-
-            if (isHigh)
-            {
-                if (price > previousSame.Price + tolerance)
-                    return "HH";
-                if (price < previousSame.Price - tolerance)
-                    return "LH";
-                return "EQH";
-            }
-
-            if (price > previousSame.Price + tolerance)
-                return "HL";
-            if (price < previousSame.Price - tolerance)
-                return "LL";
-            return "EQL";
-        }
-
-        private void DrawPivot(Pivot pivot, Pivot previousOpposite, int decisionIndex)
+        private void DrawPivot(Pivot pivot, int decisionIndex)
         {
             // Default display contains only entry arrows; no zigzag and no swing text labels.
             double markerOffset = Math.Max(Symbol.TickSize * 2, pivot.Atr * 0.08);
@@ -798,7 +772,6 @@ namespace cAlgo.Indicators
             public double Price { get; set; }
             public bool IsHigh { get; set; }
             public int Score { get; set; }
-            public string Structure { get; set; }
             public double Atr { get; set; }
             public string IconName { get; set; }
             public string EntryIconName { get; set; }
