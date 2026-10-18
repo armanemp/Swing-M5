@@ -9,7 +9,7 @@ namespace cAlgo.Indicators
     [Indicator(TimeZone = TimeZones.UTC, AccessRights = AccessRights.None, IsOverlay = true, AutoRescale = false)]
     public class SwingM5 : Indicator
     {
-                [Parameter("Pivot depth (bars)", DefaultValue = 3, MinValue = 2, MaxValue = 10, Group = "Swing detection")]
+        [Parameter("Pivot depth (bars)", DefaultValue = 3, MinValue = 2, MaxValue = 10, Group = "Swing detection")]
         public int PivotDepth { get; set; }
 
         [Parameter("ATR period", DefaultValue = 14, MinValue = 5, MaxValue = 100, Group = "Swing detection")]
