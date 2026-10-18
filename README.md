@@ -30,3 +30,34 @@
 ## نکته‌ی مهم
 
 هیچ الگوریتم عمومی نمی‌تواند سوینگ‌های آینده را از قبل با قطعیت پیش‌بینی کند. تأیید pivot به تعداد کندل‌های سمت راست نیاز دارد؛ بنابراین علامت پس از تأخیر تعریف‌شده ظاهر می‌شود. قبل از استفاده‌ی واقعی، روی داده‌ی بروکر خودت و در حساب آزمایشی ارزیابی کن.
+
+## عیب‌یابی Restore در ویندوز
+
+اگر خطای NU1301 برای `https://api.nuget.org/v3/index.json` دریافت شد، این خطا معمولاً پیش از کامپایل و هنگام اتصال به NuGet رخ می‌دهد.
+
+ابتدا این دستورات را در PowerShell اجرا کن:
+
+```powershell
+dotnet --info
+dotnet nuget list source
+Test-NetConnection api.nuget.org -Port 443
+Invoke-WebRequest "https://api.nuget.org/v3/index.json" -TimeoutSec 15 -UseBasicParsing
+```
+
+اگر منبع nuget.org غیرفعال یا حذف شده است، آن را با نامی که در فهرست منابع وجود ندارد اضافه کن:
+
+```powershell
+dotnet nuget add source "https://api.nuget.org/v3/index.json" --name nuget.org
+```
+
+سپس کش NuGet را پاک و Restore را دوباره اجرا کن:
+
+```powershell
+dotnet nuget locals all --clear
+dotnet restore .\src\SwingM5\SwingM5.csproj --source "https://api.nuget.org/v3/index.json" --disable-parallel
+dotnet build .\src\SwingM5\SwingM5.csproj --configuration Release --no-restore
+```
+
+اگر تست اتصال TCP یا `Invoke-WebRequest` شکست خورد، مشکل هنوز شبکه، DNS، پراکسی یا محدودیت فایروال است؛ تغییر کد اندیکاتور آن را برطرف نمی‌کند. از شبکه‌ی دیگری استفاده کن یا تنظیمات پراکسی/فایروال را بررسی کن. از واردکردن گواهی یا غیرفعال‌کردن بررسی TLS به‌عنوان راه‌حل دائمی خودداری کن.
+
+راه جایگزین برای کامپایل مستقیم داخل cTrader: در نسخه‌ی دسکتاپ، به بخش **Algo** برو، یک Indicator با نام `SwingM5` بساز، کد فایل `src/SwingM5/SwingM5.cs` را در آن قرار بده و با دکمه‌ی **Build** خود cTrader کامپایل کن. این روش می‌تواند از نیاز به Restore پروژه‌ی بیرونی جلوگیری کند، زیرا کد اندیکاتور به بسته‌ی NuGet دیگری به‌جز SDK ساخت بیرونی وابسته نیست.
