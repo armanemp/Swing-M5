@@ -61,3 +61,33 @@ dotnet build .\src\SwingM5\SwingM5.csproj --configuration Release --no-restore
 اگر تست اتصال TCP یا `Invoke-WebRequest` شکست خورد، مشکل هنوز شبکه، DNS، پراکسی یا محدودیت فایروال است؛ تغییر کد اندیکاتور آن را برطرف نمی‌کند. از شبکه‌ی دیگری استفاده کن یا تنظیمات پراکسی/فایروال را بررسی کن. از واردکردن گواهی یا غیرفعال‌کردن بررسی TLS به‌عنوان راه‌حل دائمی خودداری کن.
 
 راه جایگزین برای کامپایل مستقیم داخل cTrader: در نسخه‌ی دسکتاپ، به بخش **Algo** برو، یک Indicator با نام `SwingM5` بساز، کد فایل `src/SwingM5/SwingM5.cs` را در آن قرار بده و با دکمه‌ی **Build** خود cTrader کامپایل کن. این روش می‌تواند از نیاز به Restore پروژه‌ی بیرونی جلوگیری کند، زیرا کد اندیکاتور به بسته‌ی NuGet دیگری به‌جز SDK ساخت بیرونی وابسته نیست.
+
+## Build directly with the installed cTrader compiler (no NuGet required)
+
+When access to nuget.org is unavailable, use cTrader Desktop's embedded compiler instead of running `dotnet restore`.
+
+1. From the cloned repository, run this PowerShell script:
+
+   ```powershell
+   Set-Location "$HOME\Swing-M5"
+   git pull --ff-only origin main
+   .\scripts\Copy-ToCTrader.ps1
+   ```
+
+2. The script copies the single-file indicator source to `%USERPROFILE%\Documents\cAlgo\Sources\Indicators\SwingM5\SwingM5.cs`. If a file already exists there, the script first saves a timestamped backup.
+3. Open **cTrader Desktop → Settings → Algo** and select **Embedded compiler** in the compiler selector.
+4. Open **Algo → Indicators**, select/refresh `SwingM5`, then press **Build**.
+5. Confirm that cTrader reports a successful build and the indicator appears under its Indicators list. Then add it to an XAUUSD M5 chart.
+
+The script only copies source code; it does not pretend that compilation has succeeded. The actual compile result must be confirmed in cTrader's log. If the installed cTrader version does not pick up the new source automatically, restart cTrader Desktop and open the Indicators section again.
+
+## External .NET build
+
+The external project targets .NET 6 and pins `cTrader.Automate` to `1.0.21`. If that package is already in the local NuGet cache, an offline restore can be attempted with:
+
+```powershell
+dotnet restore .\src\SwingM5\SwingM5.csproj --ignore-failed-sources
+dotnet build .\src\SwingM5\SwingM5.csproj --configuration Release --no-restore
+```
+
+If the package is not cached, the external build still needs package access. The installed embedded compiler route above is the preferred offline fallback.
