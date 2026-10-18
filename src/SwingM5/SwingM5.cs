@@ -673,12 +673,12 @@ namespace cAlgo.Indicators
                 pivot.ObjectNames.Add(pivot.TextName);
             }
 
-            DateTime signalTime = Bars.OpenTimes[decisionIndex];
+            DateTime signalTime = Bars.OpenTimes[decisionIndex].AddMinutes(5);
             string side = pivot.IsHigh ? "SELL" : "BUY";
             Color signalColor = pivot.IsHigh ? Color.Red : Color.LimeGreen;
             double signalPrice = pivot.IsHigh
-                ? Bars.HighPrices[decisionIndex] + markerOffset
-                : Bars.LowPrices[decisionIndex] - markerOffset;
+                ? Bars.ClosePrices[decisionIndex] + markerOffset
+                : Bars.ClosePrices[decisionIndex] - markerOffset;
             double signalLabelPrice = pivot.IsHigh
                 ? signalPrice + labelOffset
                 : signalPrice - labelOffset;
