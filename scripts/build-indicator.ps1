@@ -1,0 +1,72 @@
+[CmdletBinding()]
+param(
+    [ValidateSet("Debug", "Release")]
+    [string]$Configuration = "Release"
+)
+
+$ErrorActionPreference = "Stop"
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$project = Join-Path $repoRoot "src\SwingM5\SwingM5.csproj"
+$configurationOutput = Join-Path $repoRoot "src\SwingM5\bin\$Configuration\net6.0"
+$artifact = Join-Path $configurationOutput "SwingM5.algo"
+$publishedDirectory = Join-Path $env:USERPROFILE "Documents\cAlgo\Sources\Indicators"
+$publishedArtifact = Join-Path $publishedDirectory "SwingM5.algo"
+
+if (-not (Test-Path -LiteralPath $project -PathType Leaf)) {
+    throw "Project file was not found: $project"
+}
+
+Push-Location $repoRoot
+try {
+    Write-Host "== Restore ==" -ForegroundColor Cyan
+    dotnet restore $project --ignore-failed-sources
+    if ($LASTEXITCODE -ne 0) {
+        throw "NuGet restore failed (exit code $LASTEXITCODE). If the package is cached, inspect the restore output above."
+    }
+
+    Write-Host ""
+    Write-Host "== Build ==" -ForegroundColor Cyan
+    dotnet build $project --configuration $Configuration --no-restore
+    if ($LASTEXITCODE -ne 0) {
+        throw "Swing-M5 compilation failed (exit code $LASTEXITCODE)."
+    }
+
+    if (-not (Test-Path -LiteralPath $artifact -PathType Leaf)) {
+        $found = Get-ChildItem -LiteralPath $configurationOutput -Filter "*.algo" -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty Name
+        throw "Expected artifact was not created: $artifact. Found: $($found -join ', '). Check Directory.Build.targets and cTrader bundle metadata."
+    }
+
+    New-Item -ItemType Directory -Path $publishedDirectory -Force | Out-Null
+
+    $sourceHash = (Get-FileHash -LiteralPath $artifact -Algorithm SHA256).Hash
+    $needsCopy = $true
+
+    if (Test-Path -LiteralPath $publishedArtifact -PathType Leaf) {
+        $publishedHash = (Get-FileHash -LiteralPath $publishedArtifact -Algorithm SHA256).Hash
+        if ($publishedHash -eq $sourceHash) {
+            $needsCopy = $false
+        }
+        else {
+            $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
+            $backup = "$publishedArtifact.bak-$stamp"
+            Copy-Item -LiteralPath $publishedArtifact -Destination $backup
+            Write-Host "Previous SwingM5.algo backed up to: $backup" -ForegroundColor Yellow
+        }
+    }
+
+    if ($needsCopy) {
+        Copy-Item -LiteralPath $artifact -Destination $publishedArtifact -Force
+    }
+
+    Write-Host ""
+    Write-Host "Swing-M5 build succeeded." -ForegroundColor Green
+    Write-Host "Build artifact: $artifact"
+    Write-Host "cTrader artifact: $publishedArtifact"
+    Get-Item -LiteralPath $publishedArtifact | Select-Object FullName, Length, LastWriteTime
+    Write-Host ""
+    Write-Host "Next: refresh/reopen cTrader Desktop -> Algo -> Indicators, then add SwingM5 to an XAUUSD M5 chart."
+}
+finally {
+    Pop-Location
+}
