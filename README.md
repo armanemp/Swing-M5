@@ -79,7 +79,7 @@ When access to nuget.org is unavailable, use cTrader Desktop's embedded compiler
 4. Open **Algo → Indicators**, select/refresh `SwingM5`, then press **Build**.
 5. Confirm that cTrader reports a successful build and the indicator appears under its Indicators list. Then add it to an XAUUSD M5 chart.
 
-The script only copies source code; it does not pretend that compilation has succeeded. The actual compile result must be confirmed in cTrader's log. If the installed cTrader version does not pick up the new source automatically, restart cTrader Desktop and open the Indicators section again.
+The source-copy script only stages code; it does not compile it. Prefer the validated project build script above when the cached cTrader.Automate package is available. The actual compile result must be confirmed in the build log. If the installed cTrader version does not pick up the new source automatically, restart cTrader Desktop and open the Indicators section again.
 
 ## External .NET build
 
@@ -91,3 +91,19 @@ dotnet build .\src\SwingM5\SwingM5.csproj --configuration Release --no-restore
 ```
 
 If the package is not cached, the external build still needs package access. The installed embedded compiler route above is the preferred offline fallback.
+
+## Build the named SwingM5.algo package
+
+The project lives below `src/SwingM5`, so cTrader.Automate can otherwise infer the wrong bundle filename from the parent folder and emit `src.algo`. The root `Directory.Build.targets` explicitly fixes the bundle metadata to the `AlgoName`, and CI verifies that the output is named `SwingM5.algo`.
+
+After pulling the latest commit, build and publish with the repository script:
+
+```powershell
+Set-Location "$HOME\Swing-M5"
+git pull --ff-only origin main
+.\scripts\build-indicator.ps1
+```
+
+The script restores from the available NuGet cache when network access is unavailable, builds Release, validates the exact local artifact path, and verifies/copies the resulting `SwingM5.algo` to `%USERPROFILE%\Documents\cAlgo\Sources\Indicators\SwingM5.algo`. If a previous file with that exact name is different, it creates a timestamped backup before replacing it.
+
+The old `%USERPROFILE%\Documents\cAlgo\Sources\Indicators\src.algo` is a wrongly named artifact from the earlier build. Do not treat it as SwingM5. Once the newly named `SwingM5.algo` is verified, you may remove or move that stale `src.algo` if you confirm it belongs to this project's earlier build and is not used by another project.
