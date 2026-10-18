@@ -4,12 +4,12 @@
 
 ## قابلیت‌ها
 
-- بدون زیگزاگ یا خطوط اتصال؛ سوینگ سقف/کف با مثلث و ساختار بازار برچسب می‌خورد.
-- عمق پیش‌فرض دو کندل سمت چپ و یک کندل M5 بسته‌شده برای تأیید اولیه‌ی برگشت.
-- علامت ورود BUY/SELL فقط پس از کندل برگشتی M5 بسته‌شده و شکست ساختار خرد M1 نمایش داده می‌شود.
-- آستانه‌ی امتیاز پیش‌فرض 60 از 100 است؛ فیلتر ATR، رد قیمت، ساختار و زمینه‌ی M15 نیز در امتیاز دخیل‌اند.
-- زمان خود سوینگ و زمان تأیید ورود جدا نشان داده می‌شوند؛ سیگنال ورود روی کندل تأیید درج می‌شود، نه به‌صورت گذشته‌نگر روی کف/سقف.
-- هشدار صوتی و پیام لاگ برای تأیید ورود زنده؛ سقف تعداد اشیای نمودار قابل تنظیم است.
+- در حالت پیش‌فرض فقط فلش‌های ورود نشان داده می‌شوند؛ زیگزاگ، متن ساختار و برچسب امتیاز خاموش‌اند.
+- کاندید سوینگ با دو کندل سمت چپ، کندل برگشتی M5 بسته‌شده و رد قیمت بررسی می‌شود.
+- تأیید M1 علاوه بر شکست ساختار خرد، به کندل جابه‌جایی قوی نیاز دارد؛ شکست ضعیف با یک تیک کافی نیست.
+- برای کاهش سیگنال خلاف روند، زمینه‌ی M15 فیلتر سخت اعمال می‌کند؛ سیگنال خلاف روند فقط نزدیک pivot هم‌جهت معتبر M15 مجاز است.
+- محدودیت فاصله‌ی برگشت از ATR، سیگنال‌های خیلی زود و تعقیب حرکت پس از برگشت شدید را فیلتر می‌کند.
+- امتیاز پیش‌فرض 60 از 100 است؛ هشدار صوتی و حداکثر تعداد فلش‌ها قابل تنظیم‌اند.
 
 ## ساختار مخزن
 
@@ -107,3 +107,15 @@ git pull --ff-only origin main
 The script restores from the available NuGet cache when network access is unavailable, builds Release, validates the exact local artifact path, and verifies/copies the resulting `SwingM5.algo` to `%USERPROFILE%\Documents\cAlgo\Sources\Indicators\SwingM5.algo`. If a previous file with that exact name is different, it creates a timestamped backup before replacing it.
 
 The old `%USERPROFILE%\Documents\cAlgo\Sources\Indicators\src.algo` is a wrongly named artifact from the earlier build. Do not treat it as SwingM5. Once the newly named `SwingM5.algo` is verified, you may remove or move that stale `src.algo` if you confirm it belongs to this project's earlier build and is not used by another project.
+
+
+## تنظیمات جدید برای کاهش شلوغی و فیلتر سیگنال
+
+- `Show swing markers` خاموش است؛ محل‌های کاندید سوینگ با مثلث جداگانه نمایش داده نمی‌شوند.
+- `Show entry score labels` خاموش است؛ متن BUY/SELL و امتیاز روی چارت رسم نمی‌شود. فلش سبز برای BUY و قرمز برای SELL باقی می‌ماند.
+- `Swing measurement lookback (bars)` مقیاس سوینگ را از اکستریم محلی اخیر می‌گیرد، نه از آخرین سیگنال قدیمی.
+- `Minimum reversal distance (ATR)` از اعلام در برگشت خیلی کوچک جلوگیری می‌کند.
+- `Maximum entry distance (ATR)` از تعقیب حرکت پس از دورشدن زیاد قیمت از نقطه‌ی سوینگ جلوگیری می‌کند.
+- در صورت کافی بودن تاریخچه‌ی M15، ورود خلاف جهت روند آن فقط با نزدیکی به pivot هم‌جهت M15 مجاز است.
+
+این فیلترها قواعد مهندسی اولیه‌اند و هنوز نیاز به بازپخش تاریخی روی دیتای همان بروکر دارند؛ ادعای نرخ موفقیت یا سود تضمین‌شده ندارند.
