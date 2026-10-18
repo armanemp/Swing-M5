@@ -193,8 +193,8 @@ namespace cAlgo.Indicators
             _pivots.Add(pivot);
             DrawPivot(pivot, decisionIndex);
 
-            // Keep enough recent analytical history for structure classification without
-            // retaining an unbounded list during very long sessions.
+            // Retain bounded history for later structure-context comparisons without
+            // allowing memory/object growth during long sessions.
             int analyticalLimit = Math.Max(500, MaximumDisplayedSwings * 10);
             while (_pivots.Count > analyticalLimit)
                 _pivots.RemoveAt(0);
