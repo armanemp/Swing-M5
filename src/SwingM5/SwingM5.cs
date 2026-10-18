@@ -18,6 +18,15 @@ namespace cAlgo.Indicators
         [Parameter("Minimum swing size (ATR)", DefaultValue = 0.8, MinValue = 0.1, MaxValue = 5.0, Group = "Swing detection")]
         public double MinimumSwingAtr { get; set; }
 
+        [Parameter("Swing measurement lookback (bars)", DefaultValue = 8, MinValue = 3, MaxValue = 30, Group = "Swing detection")]
+        public int SwingMeasurementLookback { get; set; }
+
+        [Parameter("Minimum reversal distance (ATR)", DefaultValue = 0.18, MinValue = 0.05, MaxValue = 1.0, Group = "Timing filter")]
+        public double MinimumReversalAtr { get; set; }
+
+        [Parameter("Maximum entry distance (ATR)", DefaultValue = 0.85, MinValue = 0.2, MaxValue = 3.0, Group = "Timing filter")]
+        public double MaximumEntryDistanceAtr { get; set; }
+
         [Parameter("Minimum score", DefaultValue = 60, MinValue = 0, MaxValue = 100, Group = "Quality filters")]
         public int MinimumScore { get; set; }
 
@@ -30,7 +39,10 @@ namespace cAlgo.Indicators
         [Parameter("Sound alert on entry confirmation", DefaultValue = true, Group = "Alerts")]
         public bool SoundAlertOnEntryConfirmation { get; set; }
 
-        [Parameter("Show score labels", DefaultValue = true, Group = "Display")]
+        [Parameter("Show swing markers", DefaultValue = false, Group = "Display")]
+        public bool ShowSwingMarkers { get; set; }
+
+        [Parameter("Show entry score labels", DefaultValue = false, Group = "Display")]
         public bool ShowScoreLabels { get; set; }
 
         [Parameter("Maximum displayed swings", DefaultValue = 80, MinValue = 10, MaxValue = 250, Group = "Display")]
@@ -95,7 +107,7 @@ namespace cAlgo.Indicators
                 return;
 
             double candidatePrice = isHigh ? Bars.HighPrices[candidateIndex] : Bars.LowPrices[candidateIndex];
-            if (GetRejectionWickRatio(candidateIndex, isHigh) < 0.20)
+            if (GetRejectionWickRatio(candidateIndex, isHigh) < 0.28)
                 return;
 
             if (!HasEntryTrigger(candidateIndex, decisionIndex, candidatePrice, isHigh))
@@ -116,20 +128,22 @@ namespace cAlgo.Indicators
             Pivot previousSame = FindLastPivot(isHigh, pivotTime);
             Pivot previousOpposite = FindLastPivot(!isHigh, pivotTime);
 
-            double referencePrice;
-            if (previousOpposite != null)
-            {
-                referencePrice = previousOpposite.Price;
-            }
-            else
-            {
-                referencePrice = FindLocalOppositeExtreme(candidateIndex, isHigh, PivotDepth, decisionIndex);
-            }
+            // Measure the recent local leg only. A distant prior entry can inflate this swing.
+            double referencePrice = FindLocalOppositeExtreme(
+                candidateIndex, isHigh, SwingMeasurementLookback, decisionIndex);
 
             double swingSize = Math.Abs(price - referencePrice);
             double sizeInAtr = swingSize / atr;
+            double reversalDistance = isHigh
+                ? price - Bars.ClosePrices[decisionIndex]
+                : Bars.ClosePrices[decisionIndex] - price;
+            double reversalInAtr = reversalDistance / atr;
 
             if (swingSize < atr * MinimumSwingAtr)
+                return;
+
+            // Avoid premature signals with almost no reversal and late entries after a chase.
+            if (reversalInAtr < MinimumReversalAtr || reversalInAtr > MaximumEntryDistanceAtr)
                 return;
 
             double displacement = CalculateDisplacement(candidateIndex, decisionIndex, price, isHigh);
@@ -141,18 +155,25 @@ namespace cAlgo.Indicators
                 ? CalculateHigherTimeframeBonus(price, isHigh, Bars.OpenTimes[decisionIndex].AddMinutes(5))
                 : 0;
 
+            // Hard reject entries against a strong M15 direction unless near a
+            // confirmed same-side swing level.
+            if (UseM15Context && htfBonus <= -15)
+                return;
+
             int ltfBonus = UseM1Confirmation
                 ? CalculateMicroConfirmationBonus(candidateIndex, decisionIndex, price, isHigh, atr)
                 : 0;
 
-            int score = 22;
-            score += (int)Math.Round(Clamp((sizeInAtr - MinimumSwingAtr) * 8.0, 0, 18));
-            score += (int)Math.Round(Clamp(displacementInAtr * 9.0, 0, 18));
+            int score = 20;
+            score += (int)Math.Round(Clamp((sizeInAtr - MinimumSwingAtr) * 6.0, 0, 12));
+            score += (int)Math.Round(Clamp(displacementInAtr * 8.0, 0, 10));
             score += WickScore(rejectionWickRatio);
+            score += ConfirmationCandleScore(decisionIndex, isHigh);
             if (structureShift)
-                score += 8;
+                score += 6;
             score += htfBonus;
             score += ltfBonus;
+            score += reversalInAtr <= 0.45 ? 8 : reversalInAtr <= 0.65 ? 4 : 0;
             score = (int)Clamp(score, 0, 100);
 
             if (score < MinimumScore)
@@ -221,10 +242,23 @@ namespace cAlgo.Indicators
             double decisionOpen = Bars.OpenPrices[decisionIndex];
             double decisionClose = Bars.ClosePrices[decisionIndex];
 
-            // Require a directional M5 candle close beyond the candidate candle's midpoint.
+            double decisionRange = Bars.HighPrices[decisionIndex] - Bars.LowPrices[decisionIndex];
+            if (decisionRange <= Symbol.TickSize)
+                return false;
+
+            double closeLocation = (decisionClose - Bars.LowPrices[decisionIndex]) / decisionRange;
+            double bodyRatio = GetBodyRatio(decisionIndex);
+
+            // Strong reversal candle: meaningful body and close near the reversal edge.
             bool m5ReversalClose = isHigh
-                ? decisionClose < decisionOpen && decisionClose < candidateMidpoint
-                : decisionClose > decisionOpen && decisionClose > candidateMidpoint;
+                ? decisionClose < decisionOpen &&
+                  decisionClose < candidateMidpoint &&
+                  closeLocation <= 0.40 &&
+                  bodyRatio >= 0.35
+                : decisionClose > decisionOpen &&
+                  decisionClose > candidateMidpoint &&
+                  closeLocation >= 0.60 &&
+                  bodyRatio >= 0.35;
 
             if (!m5ReversalClose)
                 return false;
@@ -278,10 +312,28 @@ namespace cAlgo.Indicators
                     priorLow = Math.Min(priorLow, _m1Bars.LowPrices[j]);
                 }
 
-                if (!isHigh && _m1Bars.ClosePrices[i] > priorHigh)
-                    return true;
+                double microRange = _m1Bars.HighPrices[i] - _m1Bars.LowPrices[i];
+                if (microRange <= 0)
+                    continue;
 
-                if (isHigh && _m1Bars.ClosePrices[i] < priorLow)
+                double microBodyRatio = Math.Abs(_m1Bars.ClosePrices[i] - _m1Bars.OpenPrices[i]) / microRange;
+                if (microBodyRatio < 0.45)
+                    continue;
+
+                double microAtr = CalculateAtr(_m1Bars, i, 14);
+                double breakBuffer = Math.Max(Symbol.TickSize * 2, microAtr * 0.08);
+                double closeLocation = (_m1Bars.ClosePrices[i] - _m1Bars.LowPrices[i]) / microRange;
+
+                bool bullishDisplacement = _m1Bars.ClosePrices[i] > _m1Bars.OpenPrices[i] &&
+                                           closeLocation >= 0.70 &&
+                                           _m1Bars.ClosePrices[i] > priorHigh + breakBuffer;
+                bool bearishDisplacement = _m1Bars.ClosePrices[i] < _m1Bars.OpenPrices[i] &&
+                                           closeLocation <= 0.30 &&
+                                           _m1Bars.ClosePrices[i] < priorLow - breakBuffer;
+
+                if (!isHigh && bullishDisplacement)
+                    return true;
+                if (isHigh && bearishDisplacement)
                     return true;
             }
 
@@ -414,14 +466,33 @@ namespace cAlgo.Indicators
 
         private int WickScore(double ratio)
         {
-            if (ratio >= 0.55)
-                return 10;
-            if (ratio >= 0.40)
-                return 8;
-            if (ratio >= 0.25)
-                return 5;
-            if (ratio >= 0.15)
-                return 2;
+            if (ratio >= 0.60) return 10;
+            if (ratio >= 0.45) return 8;
+            if (ratio >= 0.32) return 5;
+            if (ratio >= 0.28) return 2;
+            return 0;
+        }
+
+        private double GetBodyRatio(int index)
+        {
+            double range = Bars.HighPrices[index] - Bars.LowPrices[index];
+            if (range <= 0) return 0;
+            return Math.Abs(Bars.ClosePrices[index] - Bars.OpenPrices[index]) / range;
+        }
+
+        private int ConfirmationCandleScore(int index, bool isHigh)
+        {
+            double range = Bars.HighPrices[index] - Bars.LowPrices[index];
+            if (range <= 0) return 0;
+
+            double bodyRatio = GetBodyRatio(index);
+            double closeLocation = (Bars.ClosePrices[index] - Bars.LowPrices[index]) / range;
+            bool nearEdge = isHigh ? closeLocation <= 0.25 : closeLocation >= 0.75;
+            bool acceptableEdge = isHigh ? closeLocation <= 0.35 : closeLocation >= 0.65;
+
+            if (bodyRatio >= 0.65 && nearEdge) return 10;
+            if (bodyRatio >= 0.50 && acceptableEdge) return 7;
+            if (bodyRatio >= 0.35) return 3;
             return 0;
         }
 
@@ -457,25 +528,26 @@ namespace cAlgo.Indicators
             double htfClose = _m15Bars.ClosePrices[htfIndex];
 
             int trend = 0;
-            if (fastAverage > slowAverage && htfClose > fastAverage)
-                trend = 1;
-            else if (fastAverage < slowAverage && htfClose < fastAverage)
-                trend = -1;
+            if (fastAverage > slowAverage && htfClose > fastAverage) trend = 1;
+            else if (fastAverage < slowAverage && htfClose < fastAverage) trend = -1;
 
-            if ((isHigh && trend < 0) || (!isHigh && trend > 0))
-                bonus += 5;
+            bool aligned = (isHigh && trend < 0) || (!isHigh && trend > 0);
+            bool counterTrend = (isHigh && trend > 0) || (!isHigh && trend < 0);
+            if (aligned) bonus += 8;
 
+            bool nearSameSideSwing = false;
             int levelIndex = FindLatestConfirmedPivotIndex(_m15Bars, htfIndex, isHigh, 2, 96);
             double htfAtr = CalculateAtr(_m15Bars, htfIndex, 14);
 
             if (levelIndex >= 0 && htfAtr > 0)
             {
                 double level = isHigh ? _m15Bars.HighPrices[levelIndex] : _m15Bars.LowPrices[levelIndex];
-                if (Math.Abs(pivotPrice - level) <= htfAtr * 1.10)
-                    bonus += 7;
+                nearSameSideSwing = Math.Abs(pivotPrice - level) <= htfAtr * 1.10;
+                if (nearSameSideSwing) bonus += 10;
             }
 
-            return Math.Min(12, bonus);
+            if (counterTrend && !nearSameSideSwing) bonus -= 18;
+            return (int)Clamp(bonus, -18, 18);
         }
 
         private int FindLatestConfirmedPivotIndex(Bars data, int endIndex, bool isHigh, int depth, int lookback)
@@ -647,32 +719,24 @@ namespace cAlgo.Indicators
 
         private void DrawPivot(Pivot pivot, Pivot previousOpposite, int decisionIndex)
         {
-            // Mark the actual swing candle separately from the later entry confirmation.
-            // The entry arrow is never back-plotted onto the earlier pivot candle.
+            // Default display contains only entry arrows; no zigzag and no swing text labels.
             double markerOffset = Math.Max(Symbol.TickSize * 2, pivot.Atr * 0.08);
             double labelOffset = Math.Max(Symbol.TickSize * 4, pivot.Atr * 0.22);
-            double pivotMarkerPrice = pivot.Price + (pivot.IsHigh ? markerOffset : -markerOffset);
-            double pivotLabelPrice = pivot.Price + (pivot.IsHigh ? labelOffset : -labelOffset);
-            Color swingColor = pivot.IsHigh ? Color.OrangeRed : Color.MediumSeaGreen;
-            ChartIconType swingIcon = pivot.IsHigh ? ChartIconType.DownTriangle : ChartIconType.UpTriangle;
             string suffix = pivot.Time.Ticks.ToString(CultureInfo.InvariantCulture);
 
-            pivot.IconName = "SwingM5_P_" + suffix;
-            Chart.DrawIcon(pivot.IconName, swingIcon, pivot.Time, pivotMarkerPrice, swingColor);
-            pivot.ObjectNames.Add(pivot.IconName);
-
-            if (ShowScoreLabels)
+            if (ShowSwingMarkers)
             {
-                pivot.TextName = "SwingM5_PT_" + suffix;
-                Chart.DrawText(
-                    pivot.TextName,
-                    pivot.Structure + " " + pivot.Score.ToString(CultureInfo.InvariantCulture),
-                    pivot.Time,
-                    pivotLabelPrice,
-                    swingColor);
-                pivot.ObjectNames.Add(pivot.TextName);
+                double pivotMarkerPrice = pivot.Price + (pivot.IsHigh ? markerOffset : -markerOffset);
+                Color swingColor = pivot.IsHigh ? Color.OrangeRed : Color.MediumSeaGreen;
+                ChartIconType swingIcon = pivot.IsHigh ? ChartIconType.DownTriangle : ChartIconType.UpTriangle;
+
+                pivot.IconName = "SwingM5_P_" + suffix;
+                Chart.DrawIcon(pivot.IconName, swingIcon, pivot.Time, pivotMarkerPrice, swingColor);
+                pivot.ObjectNames.Add(pivot.IconName);
             }
 
+            // The arrow is time-stamped at the close of the confirming M5 candle,
+            // i.e. when the signal has become available, not at the previous swing extreme.
             DateTime signalTime = Bars.OpenTimes[decisionIndex].AddMinutes(5);
             string side = pivot.IsHigh ? "SELL" : "BUY";
             Color signalColor = pivot.IsHigh ? Color.Red : Color.LimeGreen;
@@ -684,28 +748,23 @@ namespace cAlgo.Indicators
                 : signalPrice - labelOffset;
 
             pivot.EntryIconName = "SwingM5_E_" + signalTime.Ticks.ToString(CultureInfo.InvariantCulture);
-            Chart.DrawIcon(
-                pivot.EntryIconName,
+            Chart.DrawIcon(pivot.EntryIconName,
                 pivot.IsHigh ? ChartIconType.DownArrow : ChartIconType.UpArrow,
-                signalTime,
-                signalPrice,
-                signalColor);
+                signalTime, signalPrice, signalColor);
             pivot.ObjectNames.Add(pivot.EntryIconName);
 
-            pivot.EntryTextName = "SwingM5_ET_" + signalTime.Ticks.ToString(CultureInfo.InvariantCulture);
-            Chart.DrawText(
-                pivot.EntryTextName,
-                side + " " + pivot.Score.ToString(CultureInfo.InvariantCulture),
-                signalTime,
-                signalLabelPrice,
-                signalColor);
-            pivot.ObjectNames.Add(pivot.EntryTextName);
+            if (ShowScoreLabels)
+            {
+                pivot.EntryTextName = "SwingM5_ET_" + signalTime.Ticks.ToString(CultureInfo.InvariantCulture);
+                Chart.DrawText(pivot.EntryTextName,
+                    side + " " + pivot.Score.ToString(CultureInfo.InvariantCulture),
+                    signalTime, signalLabelPrice, signalColor);
+                pivot.ObjectNames.Add(pivot.EntryTextName);
+            }
 
-            // Do not alert while replaying historical bars. At live time, each new
-            // decisionIndex is processed once and the signal is announced once.
             if (IsLastBar)
             {
-                Print("SwingM5 {0} confirmed | {1} | score {2} | pivot price {3} | confirmation bar {4}",
+                Print("SwingM5 {0} confirmed | {1} | score {2} | pivot {3} | confirmation close {4}",
                     side, SymbolName, pivot.Score, pivot.Price, signalTime);
 
                 if (SoundAlertOnEntryConfirmation)
@@ -742,7 +801,6 @@ namespace cAlgo.Indicators
             public string Structure { get; set; }
             public double Atr { get; set; }
             public string IconName { get; set; }
-            public string TextName { get; set; }
             public string EntryIconName { get; set; }
             public string EntryTextName { get; set; }
             public List<string> ObjectNames { get; } = new List<string>();
